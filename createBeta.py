@@ -32,8 +32,10 @@ sql = """
 cursor.execute(sql)
 sql = """
     CREATE TABLE OFFLINEMSG (
+    _OFFLINEMSGID int NOT NULL auto_increment,
     _username varchar(20),
     _context text,
+    PRIMARY KEY (_OFFLINEMSGID),
     FOREIGN KEY (_username) REFERENCES USER(_username) on delete cascade
     )"""
 cursor.execute(sql)

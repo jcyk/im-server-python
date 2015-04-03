@@ -26,12 +26,15 @@ def getOfflinemsg(req,context):
     cursor = db.cursor()
     username = req['username']
     #
-    sql = 'select _context from OFFLINEMSG where _username = %s'
+    sql = 'select _OFFLINEMSGID,_context from OFFLINEMSG where _username = %s'
     cursor.execute(sql,(username,))
     result = cursor.fetchall()
     for row in result:
-        onlinehander.sendll(row[0]+TAIL)
-        print "OFFLINEMSG SEND TO",onlinehander[username].client_address,row[0]
+        print "ATTEMPT SEND OFFLINEMSG TO",username,row[1]
+        sql = 'delete from OFFLINEMSG where _OFFLINEMSGID=%s'
+        cursor.execute(sql,(row[0],))
+        cursor.commit()
+        sendMsg(username,row[1])    
     db.close()
 
 def sendMsg(username,context):
@@ -44,6 +47,7 @@ def sendMsg(username,context):
         #
         sql = 'insert into OFFLINEMSG values(%s,%s)'
         cursor.execute(sql,(username,context))
+        cursor.commit()
         db.close()
 
 def teamchat(req,context):
@@ -289,6 +293,8 @@ class MyRequestHandler(SRH):
                 msg  = getUserinfo(request,data)
             elif request['type'] == 'teamchat':
                 msg = teamchat(request,data)
+            elif request['type'] == 'getofflinemsg':
+                msg = getOfflinemsg(request,data)
             self.request.sendall(msg+TAIL)
             print "SEND TO",self.client_address,msg
         if onlinehander.has_key(username):
