@@ -33,9 +33,10 @@ def getOfflinemsg(req,context):
         print "ATTEMPT SEND OFFLINEMSG TO",username,row[1]
         sql = 'delete from OFFLINEMSG where _OFFLINEMSGID=%s'
         cursor.execute(sql,(row[0],))
-        cursor.commit()
+        db.commit()
         sendMsg(username,row[1])    
     db.close()
+    return ''
 
 def sendMsg(username,context):
     if onlinehander.has_key(username):   
@@ -45,9 +46,9 @@ def sendMsg(username,context):
         db = MySQLdb.connect("localhost","root","jcyk","beta")
         cursor = db.cursor()
         #
-        sql = 'insert into OFFLINEMSG values(%s,%s)'
+        sql = 'insert into OFFLINEMSG (_username,_context) values(%s,%s)'
         cursor.execute(sql,(username,context))
-        cursor.commit()
+        db.commit()
         db.close()
 
 def teamchat(req,context):
@@ -89,7 +90,7 @@ def updateUserinfo(req,context):
         studentNo = result[2]
     sql = 'update USER set _nickname =%s, _version=_version+1,_studentNo=%s  where _username=%s'
     cursor.execute(sql,(nickname,version,studentNo,username))
-    cursor.commit()
+    db.commit()
     if(req.has_key('head')):
         filename = '%s.png'%username
         ls_f = base64.b64decode(req['head'])
