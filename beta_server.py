@@ -265,7 +265,7 @@ def myteam(req,context):
 
 class MyRequestHandler(SRH):
     def handle(self):
-        print 'got connection from ',self.client_address
+        print 'Got connection from ',self.client_address
         username = "#"
         while True:
             data = self.request.recv(1024)
@@ -301,7 +301,7 @@ class MyRequestHandler(SRH):
         if onlinehander.has_key(username):
             del onlinehander[username]
             print time.asctime( time.localtime(time.time()) ),username,'is offline'
-        print 'end connection with',self.client_address
+        print 'End connection with',self.client_address
 
 tcpServ = Server(ADDR, MyRequestHandler)
 print 'waiting for connection...'
