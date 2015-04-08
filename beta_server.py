@@ -12,14 +12,54 @@ import random
 import os
 
 onlineDic = {}
-HOST = '192.165.5.122'
-PORT = 5295
+HOST = '192.168.1.106'
+PORT = 5296
 ADDR = (HOST, PORT)
 TAIL = '######'
 
 onlinehander = {}
 class Server(TMI, TCP):
     pass
+
+def sendMsg(username,context):
+    if onlinehander.has_key(username):   
+        onlinehander[username].request.sendall(context+TAIL)
+        print "MSG SEND TO",onlinehander[username].client_address,context
+    else:
+        db = MySQLdb.connect("localhost","root","jcyk","beta")
+        cursor = db.cursor()
+        #
+        sql = 'insert into OFFLINEMSG (_username,_context) values(%s,%s)'
+        cursor.execute(sql,(username,context))
+        db.commit()
+        db.close()
+
+
+def fetchTeaminfo(teamID):
+    db = MySQLdb.connect("localhost","root","jcyk","beta")
+    cursor = db.cursor()
+    #
+    team = {}
+    team['teamID'] = teamID
+    sql = "select _teamname from TEAM where _teamID=%s"
+    cursor.execute(sql,(teamID,))
+    teamname = cursor.fetchone()
+    teamname = teamname[0]
+    team['teamname'] = teamname
+    teammember = []
+    sql = "select USER._username,_nickname from USER_TEAM,USER where USER_TEAM._username=USER._username and _teamID =%s"
+    cursor.execute(sql,(teamID,))
+    person = cursor.fetchall()
+    for x in person:
+        teammember.append({'username':x[0],'nickname':x[1]})
+    team['teammember'] = teammember
+    return team
+
+def getTeaminfo(req,context):
+    teamID = req['teamID']
+    res = fetchTeaminfo(req)
+    res['type'] = 'teaminfo_result'
+    return json.dumps(res)
 
 def getOfflinemsg(req,context):
     db = MySQLdb.connect("localhost","root","jcyk","beta")
@@ -37,19 +77,6 @@ def getOfflinemsg(req,context):
         sendMsg(username,row[1])    
     db.close()
     return ''
-
-def sendMsg(username,context):
-    if onlinehander.has_key(username):   
-        onlinehander[username].request.sendall(context+TAIL)
-        print "MSG SEND TO",onlinehander[username].client_address,context
-    else:
-        db = MySQLdb.connect("localhost","root","jcyk","beta")
-        cursor = db.cursor()
-        #
-        sql = 'insert into OFFLINEMSG (_username,_context) values(%s,%s)'
-        cursor.execute(sql,(username,context))
-        db.commit()
-        db.close()
 
 def teamchat(req,context):
     username = req['from']
@@ -89,7 +116,7 @@ def updateUserinfo(req,context):
     else:
         studentNo = result[2]
     sql = 'update USER set _nickname =%s, _version=_version+1,_studentNo=%s  where _username=%s'
-    cursor.execute(sql,(nickname,version,studentNo,username))
+    cursor.execute(sql,(nickname,studentNo,username))
     db.commit()
     if(req.has_key('head')):
         filename = '%s.png'%username
@@ -97,7 +124,10 @@ def updateUserinfo(req,context):
         f = open(filename,'wb')
         f.write(ls_f)
         f.close()
-
+    res = {}
+    res['type'] = 'updateUserinfo_result'
+    res['version'] = result[1]+1
+    return json.dumps(res)
 
 
 def getUserinfo(req,context):
@@ -222,17 +252,18 @@ def createteam (req,context):
     return json.dumps(res)
 
 def addfriend (req,context):
-    _from = req['from']
-    _to =req['to']
-    _body = req['body']
-    _teamID = req['teamID']
+    to =req['to']
+    sendMsg(to,context)
+
+def iamin(req,context):
+    username = req['username']
+    teamID =req['teamID']
     db = MySQLdb.connect("localhost","root","jcyk","beta")
     cursor = db.cursor()
     sql = "insert into USER_TEAM values(%s,%s)"
-    cursor.execute(sql,(_teamID,_to))
+    cursor.execute(sql,(teamID,username))
     db.commit()
-    return ''
-
+    db.close()
 
 def myteam(req,context):
     username = req['username']
@@ -242,22 +273,12 @@ def myteam(req,context):
     res = {}
     res['type'] = 'myteam_result'
     teamlist = []
-    sql = "select USER_TEAM._teamID,_teamname from USER_TEAM,TEAM where TEAM._teamID=USER_TEAM._teamID and _username =%s"
+    sql = "select USER_TEAM._teamID from USER_TEAM,TEAM where TEAM._teamID=USER_TEAM._teamID and _username =%s"
     cursor.execute(sql,(username,))
     result = cursor.fetchall()
     for row in result:
         teamID = row[0]
-        teamname = row[1]
-        team = {}
-        team['teamID'] = teamID
-        team['teamname'] = teamname
-        teammember = []
-        sql = "select USER._username,_nickname from USER_TEAM,USER where USER_TEAM._username=USER._username and _teamID =%s"
-        cursor.execute(sql,(teamID,))
-        person = cursor.fetchall()
-        for x in person:
-            teammember.append({'username':x[0],'nickname':x[1]})
-        team['teammember'] = teammember
+        team = fetchTeaminfo(teamID)
         teamlist.append(team)
     res['body'] = teamlist
     return json.dumps(res)
@@ -267,11 +288,15 @@ class MyRequestHandler(SRH):
     def handle(self):
         print 'Got connection from ',self.client_address
         username = "#"
+        data = ''
         while True:
-            data = self.request.recv(1024)
-            if not data:
+            raw = self.request.recv(4096)
+            if not raw:
                 print 'error'
                 break
+            data+=raw
+            if raw[len(raw)-1]!='}':
+                continue
             print "RECV FROM",self.client_address,data
             request = json.loads(data)
             msg=''
@@ -296,6 +321,11 @@ class MyRequestHandler(SRH):
                 msg = teamchat(request,data)
             elif request['type'] == 'getofflinemsg':
                 msg = getOfflinemsg(request,data)
+            elif request['type'] == 'teaminfo':
+                msg = getTeaminfo(request,data)
+            elif request['type'] == 'updateuserinfo':
+                msg = updateUserinfo(request,data)
+            data = ''
             self.request.sendall(msg+TAIL)
             print "SEND TO",self.client_address,msg
         if onlinehander.has_key(username):
