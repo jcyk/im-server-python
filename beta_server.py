@@ -10,6 +10,7 @@ import MySQLdb
 import time
 import random
 import os
+from time import strftime
 
 onlineDic = {}
 HOST = '192.168.1.106'
@@ -81,8 +82,6 @@ def getOfflinemsg(req,context):
 def teamchat(req,context):
     username = req['from']
     teamID = req['teamID']
-    body = req['body']
-    datetime = req['datetime']
     messageNo = req['messageNo']
     db = MySQLdb.connect("localhost","root","jcyk","beta")
     cursor = db.cursor()
@@ -254,6 +253,7 @@ def createteam (req,context):
 def addfriend (req,context):
     to =req['to']
     sendMsg(to,context)
+    return ''
 
 def iamin(req,context):
     username = req['username']
@@ -263,7 +263,20 @@ def iamin(req,context):
     sql = "insert into USER_TEAM values(%s,%s)"
     cursor.execute(sql,(teamID,username))
     db.commit()
+    notification = {}
+    notification['type'] = 'teamchat'
+    notification['from'] = 'admin'
+    notification['body'] = '%s join us now'%username
+    notification['datetime'] = strftime("%Y-%m-%d %X +0000", time.localtime(time.time()))
+    sql = 'select _username from USER_TEAM where _teamID =%s'
+    cursor.execute(sql,(teamID,))
+    result = cursor.fetchall()
+    for row in result:
+        if(username!=row[0]):
+            sendMsg(row[0],notification)
     db.close()
+
+    return ''
 
 def myteam(req,context):
     username = req['username']
@@ -325,6 +338,8 @@ class MyRequestHandler(SRH):
                 msg = getTeaminfo(request,data)
             elif request['type'] == 'updateuserinfo':
                 msg = updateUserinfo(request,data)
+            elif request['type'] == 'addfriend_accept':
+                msg = iamin(request,data)
             data = ''
             self.request.sendall(msg+TAIL)
             print "SEND TO",self.client_address,msg
@@ -336,12 +351,6 @@ class MyRequestHandler(SRH):
 tcpServ = Server(ADDR, MyRequestHandler)
 print 'waiting for connection...'
 tcpServ.serve_forever()
-#f = open(r'test.png','rb')
-#ls_f = base64.b64encode(f.read())
-#res = {}
-#res['type'] = 'png'
-#res['body'] = ls_f
-#tot.append(res)
 
 
 
