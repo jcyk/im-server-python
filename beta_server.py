@@ -10,22 +10,29 @@ import MySQLdb
 import time
 import random
 import os
+import thread
+import re
 from time import strftime
 
+space = re.compile(r'\s+')
 onlineDic = {}
-HOST = '192.168.1.106'
+HOST = '192.168.1.100'
 PORT = 5296
 ADDR = (HOST, PORT)
 TAIL = '######'
 
 onlinehander = {}
+
 class Server(TMI, TCP):
     pass
+def saveMoney(original):
+    return original
+    #return re.sub(space,'',original)
 
 def sendMsg(username,context):
     if onlinehander.has_key(username):   
-        onlinehander[username].request.sendall(context+TAIL)
-        print "MSG SEND TO",onlinehander[username].client_address,context
+        onlinehander[username].request.sendall(saveMoney(context+TAIL))
+        print "MSG SEND TO",onlinehander[username].client_address,context[:500]
     else:
         db = MySQLdb.connect("localhost","root","jcyk","beta")
         cursor = db.cursor()
@@ -33,8 +40,8 @@ def sendMsg(username,context):
         sql = 'insert into OFFLINEMSG (_username,_context) values(%s,%s)'
         cursor.execute(sql,(username,context))
         db.commit()
+        print "MSG SAVED",context[:500]
         db.close()
-
 
 def fetchTeaminfo(teamID):
     db = MySQLdb.connect("localhost","root","jcyk","beta")
@@ -71,7 +78,7 @@ def getOfflinemsg(req,context):
     cursor.execute(sql,(username,))
     result = cursor.fetchall()
     for row in result:
-        print "ATTEMPT SEND OFFLINEMSG TO",username,row[1]
+        print "ATTEMPT SEND OFFLINEMSG TO",username,row[1][:500]
         sql = 'delete from OFFLINEMSG where _OFFLINEMSGID=%s'
         cursor.execute(sql,(row[0],))
         db.commit()
@@ -128,7 +135,6 @@ def updateUserinfo(req,context):
     res['version'] = result[1]+1
     return json.dumps(res)
 
-
 def getUserinfo(req,context):
     username  = req['username']
     oversion = req['version']
@@ -143,7 +149,7 @@ def getUserinfo(req,context):
     res['type'] = 'userinfo_result'
     res['version'] = version
     res['username'] = username
-    if(oversion==version):
+    if(int(oversion)==version):
         pass
     else:
         filename = '%s.png'%username
@@ -296,7 +302,6 @@ def myteam(req,context):
     res['body'] = teamlist
     return json.dumps(res)
 
-
 class MyRequestHandler(SRH):
     def handle(self):
         print 'Got connection from ',self.client_address
@@ -310,7 +315,7 @@ class MyRequestHandler(SRH):
             data+=raw
             if raw[len(raw)-1]!='}':
                 continue
-            print "RECV FROM",self.client_address,data
+            print "RECV FROM",self.client_address,data[:500]
             request = json.loads(data)
             msg=''
             if request['type'] == 'register':
@@ -341,14 +346,19 @@ class MyRequestHandler(SRH):
             elif request['type'] == 'addfriend_accept':
                 msg = iamin(request,data)
             data = ''
-            self.request.sendall(msg+TAIL)
+            self.request.sendall(saveMoney(msg+TAIL))
             print "SEND TO",self.client_address,msg
         if onlinehander.has_key(username):
             del onlinehander[username]
             print time.asctime( time.localtime(time.time()) ),username,'is offline'
         print 'End connection with',self.client_address
 
+def console():
+    while(True):
+        command = input()
+        print onlinehander
 tcpServ = Server(ADDR, MyRequestHandler)
+thread.start_new_thread(console,())
 print 'waiting for connection...'
 tcpServ.serve_forever()
 
